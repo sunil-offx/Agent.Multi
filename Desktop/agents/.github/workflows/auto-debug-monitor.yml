@@ -5,7 +5,6 @@ on:
   workflow_run:
     workflows: ["Run Tests", "Lint Code"]
     types: [completed]
-  status: {}
   workflow_dispatch:
     inputs:
       error_message:
