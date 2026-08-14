@@ -4,12 +4,9 @@ name: Auto Debugging System - Error Monitoring Hook
 on:
   workflow_run:
     workflows: ["Run Tests", "Lint Code"]
-    types: [completed]
+    types:
+      - completed
   workflow_dispatch:
-    inputs:
-      error_message:
-        description: "Manually trigger with error message"
-        required: false
 
 jobs:
   monitor-errors:
