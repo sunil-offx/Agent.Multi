@@ -1,0 +1,38 @@
+{
+  "enabled": true,
+  "api": {
+    "token": "${GITHUB_TOKEN}",
+    "owner": "your-org",
+    "repo": "your-repo"
+  },
+  "workflows": [
+    {
+      "name": "tests.yml",
+      "include_on_failure": true,
+      "parse_logs": true
+    },
+    {
+      "name": "lint.yml",
+      "include_on_failure": true,
+      "parse_logs": true
+    },
+    {
+      "name": "build.yml",
+      "include_on_failure": true,
+      "parse_logs": false
+    }
+  ],
+  "ingestion": {
+    "poll_interval_seconds": 30,
+    "filter": {
+      "status": ["failure"],
+      "branches": ["main", "develop"],
+      "conclusion": ["failure", "timed_out"]
+    },
+    "max_runs_per_poll": 20
+  },
+  "alert_thresholds": {
+    "first_failure": true,
+    "consecutive_failures": 2
+  }
+}

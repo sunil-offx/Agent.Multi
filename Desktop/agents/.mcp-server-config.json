@@ -1,0 +1,32 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "github-mcp",
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}",
+        "GITHUB_OWNER": "your-org",
+        "GITHUB_REPO": "your-repo"
+      }
+    },
+    "sentry": {
+      "command": "sentry-mcp",
+      "env": {
+        "SENTRY_AUTH_TOKEN": "${SENTRY_AUTH_TOKEN}",
+        "SENTRY_ORG": "your-org",
+        "SENTRY_PROJECT": "your-project"
+      }
+    },
+    "datadog": {
+      "command": "datadog-mcp",
+      "env": {
+        "DD_API_KEY": "${DD_API_KEY}",
+        "DD_APP_KEY": "${DD_APP_KEY}",
+        "DD_SITE": "us3.datadoghq.com"
+      }
+    },
+    "filesystem": {
+      "command": "filesystem-mcp",
+      "args": ["--root", "./logs"]
+    }
+  }
+}

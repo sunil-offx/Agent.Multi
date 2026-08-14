@@ -1,0 +1,111 @@
+name: Auto Debugging System - Error Monitoring Hook
+
+# Trigger on test failures and linter issues
+on:
+  workflow_run:
+    workflows: ["Run Tests", "Lint Code"]
+    types: [completed]
+  status: {}
+  workflow_dispatch:
+    inputs:
+      error_message:
+        description: "Manually trigger with error message"
+        required: false
+
+jobs:
+  monitor-errors:
+    runs-on: ubuntu-latest
+    name: "Monitor Errors & Trigger Auto-Fix"
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check workflow status
+        id: check-status
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" = "failure" ]; then
+            echo "workflow_failed=true" >> $GITHUB_OUTPUT
+            echo "::notice::Test workflow failed - triggering error monitoring"
+          else
+            echo "workflow_failed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download workflow logs
+        if: steps.check-status.outputs.workflow_failed == 'true'
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          workflow: ${{ github.event.workflow_run.workflow_id }}
+          run_id: ${{ github.event.workflow_run.id }}
+          name: "test-results"
+          if_no_artifact_found: ignore
+
+      - name: Parse test failures
+        if: steps.check-status.outputs.workflow_failed == 'true'
+        id: parse-errors
+        run: |
+          # Extract test failure messages
+          if [ -f "test-results.json" ]; then
+            node .github/scripts/parse-test-failures.js test-results.json > errors.json
+            cat errors.json
+            echo "errors_found=true" >> $GITHUB_OUTPUT
+          else
+            echo "errors_found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Trigger Auto Debugging System
+        if: steps.parse-errors.outputs.errors_found == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AUTO_DEBUG_WEBHOOK: ${{ secrets.AUTO_DEBUG_WEBHOOK }}
+        run: |
+          # Send errors to Auto Debugging System webhook
+          curl -X POST "$AUTO_DEBUG_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -d @errors.json
+
+      - name: Wait for auto-fix PR
+        if: steps.parse-errors.outputs.errors_found == 'true'
+        timeout-minutes: 5
+        run: |
+          # Wait up to 5 minutes for Auto Debugging System to raise PR
+          node .github/scripts/wait-for-pr.js \
+            --branch "auto-fix-$(date +%s)" \
+            --timeout 300
+
+      - name: Comment on PR with auto-fix status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('auto-fix-result.json')) {
+              const result = JSON.parse(fs.readFileSync('auto-fix-result.json', 'utf8'));
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: `🤖 **Auto Debugging System Report**\n\n**Status:** ${result.status}\n**Confidence:** ${result.confidence}%\n**PR:** ${result.pr_url || 'N/A'}\n**Fixes Applied:** ${result.fixes_applied}`
+              });
+            }
+
+      - name: Notify on critical errors
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🚨 Auto Debugging System Failed',
+              body: `The Auto Debugging System encountered an error while processing CI failures.\n\nWorkflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            });
